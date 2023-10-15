@@ -48,7 +48,7 @@ namespace Agora {
 
             if (File.Exists("auteurs.txt"))
             {
-                var str = File.ReadAllLines("convo.txt");
+                var str = File.ReadAllLines("auteurs.txt");
                 foreach (var line in str)
                 {
                     var auteur = line.Split('¤')[0];
