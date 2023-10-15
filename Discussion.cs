@@ -218,6 +218,11 @@ namespace Agora {
             return sujet;
         }
 
+        /// <summary>
+        /// Répondre à la discussion en cours
+        /// </summary>
+        /// <param name="current_Auteur"></param>
+        /// <returns></returns>
         private string Répondre(Auteur current_Auteur)
         {
             return $@"
@@ -226,9 +231,8 @@ namespace Agora {
     Ne te présent pas, ne dis pas bonjour, ne fais pas de salutations !
     Ne sois pas polis, ne montre pas de marque de politesse !
 
-    Tu écris à la première personne du singulier, tu dois argulenter uniquement selon les idées de la philosophie de {current_Auteur.nom} et tu dois rester en accord avec cette dernière.
-    Tu dois synthétiser les arguments de {DernierAuteur.nom} ci dessous en une seule phrase, si {current_Auteur.nom} n'est pas d'accord il faut les critiquer de façon virulente et proposer un contre argument pour démontrer que tu as raison. Puis tu dois reprendre la question qu'il te pose et proposer une réponse. On doit ressentir une certaine personnalité en te lisant.
-    À la fin de ton message tu peux poser une question sur un point précis de la conversation pour continuer la conversation.
+    Tu écris à la première personne du singulier, tu dois argumenter uniquement selon les idées de la philosophie de {current_Auteur.nom} et tu dois rester en accord avec cette dernière.
+    Tu dois synthétiser les arguments de {DernierAuteur.nom} ci dessous en une seule phrase, si {current_Auteur.nom} n'est pas d'accord il faut les critiquer et proposer un contre argument. Puis tu dois reprendre la question qu'il te pose et proposer une réponse. On doit ressentir une certaine personnalité en te lisant.
 
     {DernierAuteur.nom} vient de dire : 
     ```
