@@ -15,7 +15,9 @@ namespace Agora {
             discussion = new Discussion();
             discussion.InitialiserAuteurs();
             discussion.InitializerMessages();
-            discussion.Continuer();
+
+            while(true)
+                discussion.Continuer();
         }
     }
 }

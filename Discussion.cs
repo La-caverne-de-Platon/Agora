@@ -34,6 +34,7 @@ namespace Agora {
         public Discussion()
         {
             Messages = new List<Message>();
+            Auteurs = new List<Auteur>();
             random = new Random();
 
         }
@@ -80,6 +81,17 @@ namespace Agora {
             }
         }
 
+        public static string FirstLetterToUpper(string str)
+        {
+            if (str == null)
+                return null;
+
+            if (str.Length > 1)
+                return char.ToUpper(str[0]) + str.Substring(1);
+
+            return str.ToUpper();
+        }
+
         /// <summary>
         /// Continuer la discussion
         /// </summary>
@@ -113,14 +125,14 @@ namespace Agora {
 
             // On demander à GPT de générer la réponse
             OpenAI AI = new OpenAI();
-            string réponseAuteur = AI.GPT(prompt);
+            string réponseAuteur = AI.GPT(prompt);           
+
+            // On corrige manuellement les soucis provoqués par GPT
+            réponseAuteur = CorrigerPostGPT(current_Auteur, réponseAuteur);
 
             // Vu qu'on vient de faire parler un auteur
             // Alors cet auteur est le dernier auteur
             DernierAuteur = current_Auteur;
-
-            // On corrige manuellement les soucis provoqués par GPT
-            réponseAuteur = CorrigerPostGPT(current_Auteur, réponseAuteur);
 
             // On ajoute la réponse à la discussion
             Messages.Add(new Message(current_Auteur, $"({current_Auteur.nom}) {réponseAuteur}"));
@@ -172,6 +184,17 @@ namespace Agora {
             result = result.Split('¤').Last();
 
             result = result.Replace(current_Auteur.nom, "ma personne");
+
+            if (result.Contains($"Cher {DernierAuteur.nom},"))
+                result = FirstLetterToUpper(result.Replace($"Cher {DernierAuteur.nom},", "").Trim());
+            if (result.Contains($"{DernierAuteur.nom},"))
+                result = FirstLetterToUpper(result.Replace($"{DernierAuteur.nom},", "").Trim());
+            if (result.Contains($"ma personne : "))
+                result = FirstLetterToUpper(result.Replace($"ma personne : ", "").Trim());
+            if (result.Contains($"Cependant,"))
+                result = FirstLetterToUpper(result.Replace($"Cependant,", "Mais ").Trim());
+            if (result.Contains($"En résumé,"))
+                result = FirstLetterToUpper(result.Replace($"En résumé,", "Donc ").Trim());
             return result;
         }
 
@@ -187,21 +210,24 @@ namespace Agora {
         private string RépondreEtChangerDeSujet(Auteur current_Auteur, string sujet)
         {
             return $@"
-    Tu incarnes {current_Auteur.nom}. Tu dois parler de lui uniquement à la première personne du singulier, comme un jeu de rôle.
-    Tu dois répondre au philosophe {DernierAuteur.nom}. 
+    Tu es en plein dans une partie de jeu de rôle.
+    Tu incarnes le philosophe {current_Auteur.nom} et ses idées.
+    Tu dois tout faire comme si tu étais lui.
+
+    Tu dois participer à la discussion en cours. Sois inventif, éloquant et imaginatif.
     Ne te présent pas, ne dis pas bonjour, ne fais pas de salutations !
-    Ne sois pas polis, ne montre pas de marque de politesse !
+    Tu tutoies les autres personnes de la conversation.
+    Tu n'utilise pas un langage soutenu, tu dois utiliser un langage informel.
+    Ne dis pas 'Cher', n'utilise pas de formule de politesse.
+    Parles comme un jeune adulte de 20 ans.
 
-    Tu écris à la première personne du singulier, tu dois argulenter uniquement selon les idées de la philosophie de {current_Auteur.nom} et tu dois rester en accord avec cette dernière.
-    Tu dois synthétiser les arguments de {DernierAuteur.nom} ci dessous, les critiquer et proposer un contre argument pour démontrer que tu as raison. On doit ressentir une certaine personnalité en te lisant.
-    À la fin de ton message tu dois poser une question pour ouvrir la conversation sur un nouveau sujet : '{sujet}'
-
-    {DernierAuteur.nom} vient de dire : 
+    Le dernier message de la conversation est de {DernierAuteur.nom}, il vient de dire : 
     ```
     {Messages.Last().contenu}
     ```
 
-    Ton message doit faire MAXIMUM 100 mots. Ne répètes pas les mots du message de {DernierAuteur.nom} ! Utilises des autres formulations que lui. Ton message doit commencer par le nom du philosophe puis le symbole ¤.";
+    Ta réponse va devoir permettre à la conversation de changer son sujet actuel en : {sujet}
+    Ta réponse doit faire MAXIMUM 100 mots. Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français.";
         }
 
         /// <summary>
@@ -226,20 +252,28 @@ namespace Agora {
         private string Répondre(Auteur current_Auteur)
         {
             return $@"
-    Tu incarnes {current_Auteur.nom}. Tu dois parler de lui uniquement à la première personne du singulier, comme un jeu de rôle.
-    Tu dois répondre au philosophe {DernierAuteur.nom}. 
+    Tu es en plein dans une partie de jeu de rôle.
+    Tu incarnes le philosophe {current_Auteur.nom} et ses idées.
+    Tu dois tout faire comme si tu étais lui.
+
+    Tu dois participer à la discussion en cours.
     Ne te présent pas, ne dis pas bonjour, ne fais pas de salutations !
-    Ne sois pas polis, ne montre pas de marque de politesse !
+    Tu tutoies les autres personnes de la conversation.
+    N'utilise pas de formule de politesse.
+    Parles comme un jeune adulte de 20 ans. Sois le plus persuasif possible.
 
-    Tu écris à la première personne du singulier, tu dois argumenter uniquement selon les idées de la philosophie de {current_Auteur.nom} et tu dois rester en accord avec cette dernière.
-    Tu dois synthétiser les arguments de {DernierAuteur.nom} ci dessous en une seule phrase, si {current_Auteur.nom} n'est pas d'accord il faut les critiquer et proposer un contre argument. Puis tu dois reprendre la question qu'il te pose et proposer une réponse. On doit ressentir une certaine personnalité en te lisant.
+    Écris d'une manière décontractée et amicale, comme si tu parlais de quelque chose à un ami. 
+    Utilise un langage naturel et des phrases qu'une personne réelle utiliserait : dans des conversations normales.
+    Tu dois utiliser un ton convaincant, des questions rhétoriques et des histoires pour maintenir l'intérêt du lecteur. 
+    Utilise des simulations, des métaphores et d'autres outils littéraires pour faciliter la compréhension et la mémorisation de tes arguments. 
+    [Il faut écrire d'une manière à la fois éducative et amusante.]
 
-    {DernierAuteur.nom} vient de dire : 
+    Le dernier message de la conversation est de {DernierAuteur.nom}, il vient de dire : 
     ```
     {Messages.Last().contenu}
     ```
 
-    Ton message doit faire MAXIMUM 100 mots. Ne répètes pas les mots du message de {DernierAuteur.nom} ! Utilises des autres formulations que lui. Ton message doit commencer par le nom du philosophe puis le symbole ¤.";
+    Ta réponse doit souligner un point important, et faire MAXIMUM 100 mots. Ne termine pas ta réponse par une question ! Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français.";
         }
 
         /// <summary>
