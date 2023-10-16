@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Agora {
     public class Discussion {
@@ -18,6 +19,11 @@ namespace Agora {
         /// L'historique des messages de la conversation
         /// </summary>
         public List<Message> Messages;
+
+        /// <summary>
+        /// Le sujet de conversation actuel;
+        /// </summary>
+        public string Sujet;
 
         /// <summary>
         /// Une instance de Random pour générer des entiers aléatoires
@@ -108,6 +114,15 @@ namespace Agora {
             if (Messages.Count % 10 == 0)
                 ChangerSujet = true;
 
+            // Vérifier si au moins un des six derniers messages a été écrit par current_Auteur
+            for (int i = Messages.Count - 1; i >= Math.Max(0, Messages.Count - 6); i--)
+            {
+                if (Messages[i].auteur == current_Auteur)
+                {
+                    ChangerSujet = true;
+                    break; // Sortez de la boucle dès que vous trouvez un message de current_Auteur
+                }
+            }
 
             string prompt;
             // Si on ne doit pas changer de sujet
@@ -119,8 +134,8 @@ namespace Agora {
             else
             {
                 // Sinon, on demande au site un sujet de dissertation
-                string sujet = RécupérerSujet();
-                prompt = RépondreEtChangerDeSujet(current_Auteur, sujet);
+                RécupérerSujet();
+                prompt = RépondreEtChangerDeSujet(current_Auteur);
             }
 
             // On demander à GPT de générer la réponse
@@ -136,6 +151,10 @@ namespace Agora {
 
             // On ajoute la réponse à la discussion
             Messages.Add(new Message(current_Auteur, $"({current_Auteur.nom}) {réponseAuteur}"));
+
+            //On affiche la réponse ici pour l'UI
+            Console.WriteLine($"[{current_Auteur.nom}] {réponseAuteur}");
+
 
             // Maintenant il faut envoyer le message au serveur
             // Discord avec les WebHooks
@@ -181,12 +200,20 @@ namespace Agora {
         {
             char c = "'".ToCharArray()[0];
             result = result.Replace('"', c);
-            result = result.Split('¤').Last();
+            result = result.Replace("¤¤", "¤");
+
+            if(Regex.Matches(result, "¤").Count > 1)
+            {
+                result = result.Split('¤').Last();
+            }
+           
 
             result = result.Replace(current_Auteur.nom, "ma personne");
 
             if (result.Contains($"Cher {DernierAuteur.nom},"))
                 result = FirstLetterToUpper(result.Replace($"Cher {DernierAuteur.nom},", "").Trim());
+            if (result.Contains($"cher {DernierAuteur.nom},"))
+                result = FirstLetterToUpper(result.Replace($"cher {DernierAuteur.nom},", "").Trim());
             if (result.Contains($"{DernierAuteur.nom},"))
                 result = FirstLetterToUpper(result.Replace($"{DernierAuteur.nom},", "").Trim());
             if (result.Contains($"ma personne : "))
@@ -195,6 +222,26 @@ namespace Agora {
                 result = FirstLetterToUpper(result.Replace($"Cependant,", "Mais ").Trim());
             if (result.Contains($"En résumé,"))
                 result = FirstLetterToUpper(result.Replace($"En résumé,", "Donc ").Trim());
+            if (result.Contains($"Ma personne :"))
+                result = FirstLetterToUpper(result.Replace($"Ma personne :", "").Trim());
+            if (result.Contains($"Ma personne"))
+                result = FirstLetterToUpper(result.Replace($"Ma personne", "").Trim());
+            if (result.Contains($"(ma personne)"))
+                result = FirstLetterToUpper(result.Replace($"(ma personne)", "").Trim());
+            if (result.Contains($"ma personne"))
+                result = FirstLetterToUpper(result.Replace($"ma personne", "").Trim());
+            //essaie pour zapper TOUTES les politesses nulles au début des réponses :
+            // TODO : trouver un meilleur moyen ?
+
+
+            //remplacer les tournures redondentes ...
+            result = result.Replace("Selon moi, ", "Il me semble quand-même que ");
+
+
+            //result = result.Split('.')[1];
+
+            result = result.Replace("¤", "");
+            result = FirstLetterToUpper(result.Trim());
             return result;
         }
 
@@ -207,7 +254,7 @@ namespace Agora {
         /// <param name="current_Auteur"></param>
         /// <param name="sujet"></param>
         /// <returns></returns>
-        private string RépondreEtChangerDeSujet(Auteur current_Auteur, string sujet)
+        private string RépondreEtChangerDeSujet(Auteur current_Auteur)
         {
             return $@"
     Tu es en plein dans une partie de jeu de rôle.
@@ -226,7 +273,7 @@ namespace Agora {
     {Messages.Last().contenu}
     ```
 
-    Ta réponse va devoir permettre à la conversation de changer son sujet actuel en : {sujet}
+    Ta réponse va devoir permettre à la conversation de changer son sujet actuel en : {Sujet}
     Ta réponse doit faire MAXIMUM 100 mots. Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français.";
         }
 
@@ -236,12 +283,11 @@ namespace Agora {
         /// nous donne un sujet de dissertation au hasard
         /// </summary>
         /// <returns></returns>
-        private static string RécupérerSujet()
+        private void RécupérerSujet()
         {
             WebClient wc = new WebClient();
             wc.Encoding = Encoding.UTF8;
-            var sujet = wc.DownloadString("https://lacavernedeplaton.fr/generateur-sujet.php?API=true");
-            return sujet;
+            Sujet = "Le sujet fil conducteur de la conversation est : " + wc.DownloadString("https://lacavernedeplaton.fr/generateur-sujet.php?API=true");
         }
 
         /// <summary>
@@ -252,28 +298,22 @@ namespace Agora {
         private string Répondre(Auteur current_Auteur)
         {
             return $@"
-    Tu es en plein dans une partie de jeu de rôle.
-    Tu incarnes le philosophe {current_Auteur.nom} et ses idées.
-    Tu dois tout faire comme si tu étais lui.
+Tu es une IA qui joue à un jeu de rôle. Tu dois immiter {current_Auteur.nom}. Personnalité de {current_Auteur.nom} : {current_Auteur.style()}.
 
-    Tu dois participer à la discussion en cours.
-    Ne te présent pas, ne dis pas bonjour, ne fais pas de salutations !
-    Tu tutoies les autres personnes de la conversation.
-    N'utilise pas de formule de politesse.
-    Parles comme un jeune adulte de 20 ans. Sois le plus persuasif possible.
+{Sujet}
 
-    Écris d'une manière décontractée et amicale, comme si tu parlais de quelque chose à un ami. 
-    Utilise un langage naturel et des phrases qu'une personne réelle utiliserait : dans des conversations normales.
-    Tu dois utiliser un ton convaincant, des questions rhétoriques et des histoires pour maintenir l'intérêt du lecteur. 
-    Utilise des simulations, des métaphores et d'autres outils littéraires pour faciliter la compréhension et la mémorisation de tes arguments. 
-    [Il faut écrire d'une manière à la fois éducative et amusante.]
+Historique de la conversation :
+```
+{Messages[Messages.Count - 3].contenu}
+{Messages[Messages.Count - 2].contenu}
+{Messages[Messages.Count -1].contenu}
+```
 
-    Le dernier message de la conversation est de {DernierAuteur.nom}, il vient de dire : 
-    ```
-    {Messages.Last().contenu}
-    ```
+Tu répond à {Messages[Messages.Count - 1].auteur.nom}. Si tu n'est pas d'accord avec lui tu dois le lui faire savoi.
 
-    Ta réponse doit souligner un point important, et faire MAXIMUM 100 mots. Ne termine pas ta réponse par une question ! Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français.";
+Pas de politesse, tu le tutois, ce n'est pas ton ami pour autant. Tu lui répond directement, addresse toi à lui, alterque-le. Dynamise la conversation ! Mets de l'humeur !!
+
+Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français. Max 80 mots.";
         }
 
         /// <summary>
@@ -323,7 +363,7 @@ namespace Agora {
             string toSave = "";
             foreach (var msg in Messages)
             {
-                toSave = toSave + $"{msg.contenu}" + Environment.NewLine;
+              toSave = toSave + $"({msg.auteur.nom})¤{msg.contenu}" + Environment.NewLine;
             }
             File.WriteAllText("convo.txt", toSave);
         }

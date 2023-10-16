@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Agora {
+﻿namespace Agora {
     internal class Program {
 
         /// <summary>

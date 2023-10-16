@@ -117,6 +117,8 @@ for message in response:
             output = output.Replace("ñ", "¤");
             output = output.Replace("Ã", "Ç");
             output = output.Replace("¹", "û");
+            output = output.Replace("£", "œ");
+
             return output;
         }
 
