@@ -5,7 +5,17 @@
 # Agora
 Une application pour faire parler les philosophes sur le serveur Discord via les webhooks
 
+## Une version en ligne ! 
+
+Direction → [La Caverne de Platon](https://lacavernedeplaton.fr/dialogos)
+
+
 ## Comment ça marche ? 
+
+J'utilise [G4Free](https://github.com/xtekky/gpt4free) et [Elevenlabs Unleashed](https://github.com/GaspardCulis/elevenlabs-unleashed) pour générer le texte et l'audio.
+
+
+## Comment l'utiliser ?
 
 ### 1. Générer des WebHooks
 Sur votre serveur Discord :
