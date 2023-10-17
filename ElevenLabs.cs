@@ -21,14 +21,14 @@ namespace Agora {
 
                 string backup = @"
 import sys
+from elevenlabs_unleashed.manager import ELUAccountManager
 from elevenlabs import generate, save, set_api_key, play, api
 from elevenlabs_unleashed.tts import UnleashedTTS
 
 def text_to_speech(input_string):
-    tts = UnleashedTTS(nb_accounts=2, create_accounts_threads=2)
     audio = generate(
             text=input_string,
-            voice=""VOIX"", # I like this one
+            voice=""VOIX"",
             model=""MODELE""
         )
     save(audio, ""001.wav"")
@@ -36,6 +36,7 @@ def text_to_speech(input_string):
 
 if __name__ == ""__main__"":
         input_string = ""HERE""
+        tts = UnleashedTTS(nb_accounts=1, create_accounts_threads=0)
         text_to_speech(input_string)
 ";
 

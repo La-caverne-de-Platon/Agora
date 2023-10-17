@@ -145,6 +145,10 @@ namespace Agora {
             // On corrige manuellement les soucis provoqués par GPT
             réponseAuteur = CorrigerPostGPT(current_Auteur, réponseAuteur);
 
+            // Quelque chose s'est mal passé et on va l'oublier :)
+            if (réponseAuteur.Length < 5)
+                return;
+
             // Vu qu'on vient de faire parler un auteur
             // Alors cet auteur est le dernier auteur
             DernierAuteur = current_Auteur;
@@ -160,14 +164,18 @@ namespace Agora {
             // Discord avec les WebHooks
             réponseAuteur = EnvoyerWebHookDiscord(current_Auteur, réponseAuteur);
 
-            // On sauvegarde la conversation dans le fichier convo.txt
-            SauvegarderLaConversation();
+            
 
             // On génère l'audio de la réponse
             ElevenLabs elevenLabs = new ElevenLabs();
             if (!elevenLabs.Speak(this))
             {
                 Console.WriteLine("Error ElevenLabs !");
+            }
+            else {
+                // On sauvegarde la conversation dans le fichier convo.txt
+                SauvegarderLaConversation();
+                Console.Write("... audio generated !" + Environment.NewLine);
             }
 
         }
