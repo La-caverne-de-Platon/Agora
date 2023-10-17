@@ -89,6 +89,7 @@ for message in response:
                 goto ENCORE;
             }
 
+            File.Delete(ScriptTemporaire);
             return output;
         }
 

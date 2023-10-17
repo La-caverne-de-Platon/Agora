@@ -67,6 +67,10 @@ if __name__ == ""__main__"":
                 string error = process.StandardError.ReadToEnd();
                 process.WaitForExit();
 
+                if(error != "")
+                {
+                    var xeno = 1337;
+                }
                 if (File.Exists(@"001.wav"))
                 {
                     File.Copy(@"001.wav", $"audios/{idFile}.wav");

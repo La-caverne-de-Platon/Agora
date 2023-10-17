@@ -4,8 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Agora {
     public partial class Discussion {
@@ -36,6 +38,21 @@ namespace Agora {
         /// deux fois de suite)
         /// </summary>
         public static Auteur DernierAuteur;
+
+        /// <summary>
+        /// L'auteur du message que le programme est en train de traiter
+        /// </summary>
+        public static Auteur CurrentAuteur;
+
+        /// <summary>
+        /// Pour activer ou non la génération du fichier audio
+        /// </summary>
+        public bool GénérerAudio = false;
+
+        public bool EnvoyerSurDiscord = true;
+
+        public bool MettreAJourLeFichierConversation = true;
+
 
         public Discussion()
         {
@@ -104,105 +121,245 @@ namespace Agora {
         internal void Continuer()
         {
 
-            // On récupère un auteur au hasard
-            Auteur current_Auteur = AuteurAuHasard();
+            string typo = "";
 
+            typo = TypoAuHasard();
 
-            // Pour forcer la main au destin on change de sujet tous les 10 messages
-            // Il n'y a qu'à vérifier si le n° du message actuel est un multiple de 10
-            bool ChangerSujet = false;
-            if (Messages.Count % 10 == 0)
-                ChangerSujet = true;
+           
 
-            // Vérifier si au moins un des six derniers messages a été écrit par current_Auteur
-            for (int i = Messages.Count - 1; i >= Math.Max(0, Messages.Count - 6); i--)
-            {
-                if (Messages[i].auteur == current_Auteur)
-                {
-                    ChangerSujet = true;
-                    break; // Sortez de la boucle dès que vous trouvez un message de current_Auteur
-                }
-            }
+            /*
+             réponse directe au précédent
+             réponse qui continue le message précédent
+             réponse qui s'immisce dans la conversation
+             réponse qui vient changer de sujet
+             */
+
 
             string prompt;
-            // Si on ne doit pas changer de sujet
-            if (!ChangerSujet)
+            switch (typo) // On ajoute un nouvel auteur dans la discussion
             {
-                // On répond normalement
-                prompt = Répondre(current_Auteur);
-            }
-            else
-            {
-                // Sinon, on demande au site un sujet de dissertation
-                RécupérerSujet();
-                prompt = RépondreEtChangerDeSujet(current_Auteur);
+                case "rep_immisce":
+                    // On récupère un auteur au hasard
+                    CurrentAuteur = AuteurAuHasard();
+                    DernierAuteur = Messages.Last().auteur;
+                    prompt = InsertionNouvellePersonne(CurrentAuteur);
+                    break;
+                case "rep_continue":
+                    CurrentAuteur = Messages.Last().auteur;
+                    DernierAuteur = Messages.Last().auteur;
+                    prompt = ContinuerMessagePrécédent();
+                    break;
+                case "rep_change":
+                    // On récupère un auteur au hasard
+                    CurrentAuteur = AuteurAuHasard();
+                    DernierAuteur = Messages[Messages.Count - 1].auteur;
+                    prompt = RépondreEtChangerDeSujet(CurrentAuteur);
+                    break;
+                case "rep_direct":
+                    CurrentAuteur = Messages[Messages.Count -2].auteur;
+                    DernierAuteur = Messages[Messages.Count - 1].auteur;
+                    prompt = RépondreDirectement();
+                    break;
+                default:
+                    CurrentAuteur = Messages.Last().auteur;
+                    DernierAuteur = Messages.Last().auteur;
+                    prompt = ContinuerMessagePrécédent();
+                    break;
             }
 
             // On demander à GPT de générer la réponse
             OpenAI AI = new OpenAI();
-            string réponseAuteur = AI.GPT(prompt);           
+            string réponseAuteur = AI.GPT(prompt);       //TODO : mettre corriger dans cette classe là-bas     
 
             // On corrige manuellement les soucis provoqués par GPT
-            réponseAuteur = CorrigerPostGPT(current_Auteur, réponseAuteur);
+            réponseAuteur = CorrigerPostGPT(CurrentAuteur, réponseAuteur);
 
+            Console.WriteLine(typo);
+            Console.WriteLine(Sujet);
+
+            if(CurrentAuteur == DernierAuteur)
+                //réponseAuteur = réponseAuteur.Substring(réponseAuteur.IndexOf(".") + 1).Trim();
             // Quelque chose s'est mal passé et on va l'oublier :)
             if (réponseAuteur.Length < 5)
                 return;
 
+            réponseAuteur = FirstLetterToUpper(réponseAuteur);
+
             // Vu qu'on vient de faire parler un auteur
             // Alors cet auteur est le dernier auteur
-            DernierAuteur = current_Auteur;
+            DernierAuteur = CurrentAuteur;
 
             // On ajoute la réponse à la discussion
-            Messages.Add(new Message(current_Auteur, $"({current_Auteur.nom}) {réponseAuteur}"));
+            Messages.Add(new Message(CurrentAuteur, $"({CurrentAuteur.nom}) {réponseAuteur}"));
 
             //On affiche la réponse ici pour l'UI
-            Console.WriteLine($"[{current_Auteur.nom}] {réponseAuteur}");
+            Console.WriteLine($"[{CurrentAuteur.nom}] {réponseAuteur}");
 
 
-            // Maintenant il faut envoyer le message au serveur
-            // Discord avec les WebHooks
-            réponseAuteur = EnvoyerWebHookDiscord(current_Auteur, réponseAuteur);
 
-            
-
-            // On génère l'audio de la réponse
-            ElevenLabs elevenLabs = new ElevenLabs();
-            if (!elevenLabs.Speak(this))
+            if (GénérerAudio)
             {
-                Console.WriteLine("Error ElevenLabs !");
+                // On génère l'audio de la réponse
+                ElevenLabs elevenLabs = new ElevenLabs();
+                if (!elevenLabs.Speak(this))
+                {
+                    Console.WriteLine("Error ElevenLabs !");
+                }
+                else
+                {
+                    Console.Write("... audio generated !" + Environment.NewLine);
+
+
+                }
+
             }
-            else {
-                // On sauvegarde la conversation dans le fichier convo.txt
+
+            if (MettreAJourLeFichierConversation)
                 SauvegarderLaConversation();
-                Console.Write("... audio generated !" + Environment.NewLine);
-            }
+
+            if (EnvoyerSurDiscord)
+                EnvoyerWebHookDiscord(CurrentAuteur, réponseAuteur);
+
+
 
         }
 
-        private string EnvoyerWebHookDiscord(Auteur current_Auteur, string result)
+        public string TypoAuHasard()
+        {
+            string typo;
+            bool rep_directe = Chance(40);
+            bool rep_continue = Chance(40);
+            bool rep_immisce = Chance(20);
+            bool rep_change = Chance(20);
+
+            List<string> b = new List<string>();
+            if (rep_directe)
+            {
+                b.Add("rep_direct");
+            }
+            else
+            {
+                if (rep_continue)
+                    b.Add("rep_continue");
+                if (rep_immisce)
+                    b.Add("rep_immisce");
+                if (rep_change)
+                    b.Add("rep_change");
+            }
+            if (b.Count == 0)
+            {
+                List<string> c = new List<string>
+                {
+                    "rep_direct",
+                    "rep_continue",
+                    "rep_immisce",
+                    "rep_change",
+                    "rep_continue"
+                };
+
+                b.Add(c[GetRandomInt(0, 4)]);
+            }
+            
+            typo = Outils.TypologieAuHasard(b);
+
+            if (typo == "rep_direct" && Messages[Messages.Count - 1].auteur == Messages[Messages.Count - 2].auteur)
+                typo = "rep_immisce";
+            return typo;
+        }
+
+        private string RépondreDirectement()
+        {
+            return $@"
+Contexte : Tu es une IA qui joue à un jeu de rôle. Tu joues le rôle de {Messages[Messages.Count -2].auteur.nom} dans une conversation.
+Personnalité de {Messages[Messages.Count - 2].auteur.nom} : {Messages[Messages.Count - 2].auteur.style()}.
+Philosophie de {Messages[Messages.Count - 2].auteur.nom} : {Messages[Messages.Count - 2].auteur.philosophie}
+
+{Sujet}
+
+Historique de la conversation :
+```
+{Messages[Messages.Count - 3].contenu}
+{Messages[Messages.Count - 2].contenu}
+{Messages[Messages.Count - 1].contenu}
+```
+
+Tu répond à {Messages.Last().auteur.nom}. Si tu n'est pas d'accord avec lui tu dois le lui faire savoir de façon nette : insiste sur les erreures logiques, utilises de la réthorique. Sinon, tu dois développer davantage ses arguments en les synthétisant et en développant le point de vue de la philosophie de {Messages[Messages.Count - 2].auteur.nom}.
+
+Pas de politesse, tu le tutois, ce n'est pas ton ami pour autant. Tu lui répond directement, addresse toi à lui, alterque-le. Dynamise la conversation ! Mets de l'humeur !! On doit sentir ta personnalité forte en te lisant.
+
+Tu dois toujours parler de {Messages[Messages.Count - 2].auteur.nom} à la première personne.
+
+Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français. Max 100 mots.";
+        }
+
+        private string ContinuerMessagePrécédent()
+        {
+            return $@"
+Contexte : Tu es une IA qui joue à un jeu de rôle. Tu joues le rôle de {Messages.Last().auteur.nom} dans une conversation. 
+Personnalité de {Messages.Last().auteur.nom} : {Messages.Last().auteur.style()}.
+Philosophie de {Messages.Last().auteur.nom} : {Messages.Last().auteur.philosophie}
+
+{Sujet}
+
+Tu dois écrire la suite de ton message : 
+
+```
+{Messages[Messages.Count - 1].contenu}
+```
+
+Tu dois développer d'autres idées, analyser d'autres possibilités, et développer tes arguments. Tu dois appliquer ta philosophie.
+
+Mets de l'humeur !! On doit sentir ta personnalité forte en te lisant.
+
+Ne te répète surtout pas. Sois original.
+
+Tu dois toujours parler de {Messages.Last().auteur.nom} à la première personne du singulier !
+
+Ta réponse doit commencer par le symbole ¤. Tu dois écrire en français. Max 80 mots.";
+        }
+
+        
+
+
+
+        private void EnvoyerWebHookDiscord(Auteur current_Auteur, string result)
         {
             string webhookUrl = current_Auteur.url;
 
-            string arg = GenerateCurlCommand(result, webhookUrl);
 
-            using (Process process = new Process())
+            try
             {
-                process.StartInfo.FileName = "cmd.exe";
-                process.StartInfo.Arguments = $"/c {arg}";
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.CreateNoWindow = true;
-                process.Start();
+                using (HttpClient client = new HttpClient())
+                {
+                    var jsonContent = new
+                    {
+                        content = result,
+                        embeds = new object[0],
+                        attachments = new object[0]
+                    };
 
-                result = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                //
-                Console.WriteLine(result);
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(jsonContent);
+
+                    StringContent httpContent = new StringContent(json, Encoding.UTF8, "application/json");
+
+                    HttpResponseMessage response = client.PostAsync(webhookUrl, httpContent).Result;
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine("Message posted successfully.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Error: {response.StatusCode.ToString()}");
+                    }
+                }
             }
-
-            return result;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
         }
+
 
         /// <summary>
         /// Une méthode pour corriger manuellement les petits soucis
@@ -211,7 +368,7 @@ namespace Agora {
         /// <param name="current_Auteur"></param>
         /// <param name="result"></param>
         /// <returns></returns>
-        private static string CorrigerPostGPT(Auteur current_Auteur, string result)
+        public static string CorrigerPostGPT(Auteur current_Auteur, string result)
         {
             char c = "'".ToCharArray()[0];
             result = result.Replace('"', c);
@@ -224,13 +381,12 @@ namespace Agora {
            
 
             result = result.Replace(current_Auteur.nom, "ma personne");
+            result = result.Replace("Salut les gars !", "");
 
-            if (result.Contains($"Cher {DernierAuteur.nom},"))
-                result = FirstLetterToUpper(result.Replace($"Cher {DernierAuteur.nom},", "").Trim());
-            if (result.Contains($"cher {DernierAuteur.nom},"))
-                result = FirstLetterToUpper(result.Replace($"cher {DernierAuteur.nom},", "").Trim());
-            if (result.Contains($"{DernierAuteur.nom},"))
-                result = FirstLetterToUpper(result.Replace($"{DernierAuteur.nom},", "").Trim());
+            //Mon cher Descartes
+            if (result.Contains($"Mon Cher {DernierAuteur.nom},"))
+                result = FirstLetterToUpper(result.Replace($"Mon Cher {DernierAuteur.nom},", "").Trim());
+            
             if (result.Contains($"ma personne : "))
                 result = FirstLetterToUpper(result.Replace($"ma personne : ", "").Trim());
             if (result.Contains($"Cependant,"))
@@ -253,6 +409,8 @@ namespace Agora {
             result = result.Replace("Selon moi, ", "Il me semble quand-même que ");
 
 
+            result = result.Replace(DernierAuteur.nom, DernierAuteur.discordID);
+
             //result = result.Split('.')[1];
 
             result = result.Replace("¤", "");
@@ -271,6 +429,7 @@ namespace Agora {
         /// <returns></returns>
         private string RépondreEtChangerDeSujet(Auteur current_Auteur)
         {
+            RécupérerSujet();
             return $@"
     Tu es en plein dans une partie de jeu de rôle.
     Tu incarnes le philosophe {current_Auteur.nom} et ses idées.
@@ -302,7 +461,7 @@ namespace Agora {
         {
             WebClient wc = new WebClient();
             wc.Encoding = Encoding.UTF8;
-            Sujet = "Le sujet fil conducteur de la conversation est : " + wc.DownloadString("https://lacavernedeplaton.fr/generateur-sujet.php?API=true");
+            Sujet = "Le fil conducteur de la conversation est : " + wc.DownloadString("https://lacavernedeplaton.fr/generateur-sujet.php?API=true");
         }
 
         /// <summary>
@@ -310,11 +469,12 @@ namespace Agora {
         /// </summary>
         /// <param name="current_Auteur"></param>
         /// <returns></returns>
-        private string Répondre(Auteur current_Auteur)
+        private string InsertionNouvellePersonne(Auteur current_Auteur)
         {
             return $@"
-Tu es une IA qui joue à un jeu de rôle. Tu dois immiter {current_Auteur.nom}. Personnalité de {current_Auteur.nom} : {current_Auteur.style()}.
-
+Contexte : Tu es une IA qui joue à un jeu de rôle. Tu joues le rôle de {current_Auteur.nom} dans une conversation. 
+Personnalité de {current_Auteur.nom} : {current_Auteur.style()}.
+Philosophie de {current_Auteur.nom} : {current_Auteur.philosophie}
 {Sujet}
 
 Historique de la conversation :
@@ -324,11 +484,15 @@ Historique de la conversation :
 {Messages[Messages.Count -1].contenu}
 ```
 
-Tu répond à {Messages[Messages.Count - 1].auteur.nom}. Si tu n'est pas d'accord avec lui tu dois le lui faire savoi.
+Tu répond à {Messages[Messages.Count - 1].auteur.nom}. Si tu n'est pas d'accord avec lui tu dois le lui faire savoir de façon nette : insiste sur les erreures logiques, utilises de la réthorique. Sinon, tu dois développer davantage ses arguments en les synthétisant et en développant le point de vue de la philosophie de {current_Auteur.nom}.
 
-Pas de politesse, tu le tutois, ce n'est pas ton ami pour autant. Tu lui répond directement, addresse toi à lui, alterque-le. Dynamise la conversation ! Mets de l'humeur !!
+Pas de politesse, tu le tutois, ce n'est pas ton ami pour autant. Tu lui répond directement, addresse toi à lui, alterque-le. Dynamise la conversation ! Mets de l'humeur !! On doit sentir ta personnalité forte en te lisant.
 
-Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français. Max 80 mots.";
+Tu dois toujours parler de {current_Auteur.nom} à la première personne du singulier.
+
+Ne te présente pas, ne dis pas bonjour.
+
+Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois écrire en français. Max 100 mots.";
         }
 
         /// <summary>
@@ -384,5 +548,39 @@ Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois 
             File.WriteAllText("convo.txt", toSave);
             File.WriteAllText($"txt/{Messages.Count}.txt", $"({Messages.Last().auteur.nom})¤ {Messages.Last().contenu}");
         }
+
+        /// <summary>
+        /// Renvoit 'true' avec une probabilité indiquée
+        /// </summary>
+        /// <param name="probability"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static bool Chance(int probability)
+        {
+            if (probability < 0 || probability > 100)
+            {
+                throw new ArgumentException("La probabilité doit être comprise entre 0 et 100.");
+            }
+
+            int randomNumber = randomGenerator.Value.Next(0, 100); // Generate a random number for the current thread.
+
+            return randomNumber < probability;
+        }
+
+        private static ThreadLocal<Random> randomGenerator = new ThreadLocal<Random>(() =>
+        {
+            return new Random(Guid.NewGuid().GetHashCode());
+        });
+
+        public static int GetRandomInt(int min, int max)
+        {
+            if (min > max)
+            {
+                throw new ArgumentException("min should be less than or equal to max.");
+            }
+
+            return randomGenerator.Value.Next(min, max + 1); // Generate a random integer within the specified range.
+        }
+
     }
 }

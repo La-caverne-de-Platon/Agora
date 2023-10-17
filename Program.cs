@@ -1,4 +1,6 @@
-﻿namespace Agora {
+﻿using System;
+
+namespace Agora {
     internal class Program {
 
         /// <summary>
@@ -8,7 +10,8 @@
 
         
         static void Main(string[] args)
-        {
+        {  
+
             discussion = new Discussion();
             discussion.InitialiserAuteurs();
             discussion.InitializerMessages();
