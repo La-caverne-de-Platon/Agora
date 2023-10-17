@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Agora {
-    public class Discussion {
+    public partial class Discussion {
 
         /// <summary>
         /// La liste des auteurs de la conversation
@@ -162,6 +162,13 @@ namespace Agora {
 
             // On sauvegarde la conversation dans le fichier convo.txt
             SauvegarderLaConversation();
+
+            // On génère l'audio de la réponse
+            ElevenLabs elevenLabs = new ElevenLabs();
+            if (!elevenLabs.Speak(this))
+            {
+                Console.WriteLine("Error ElevenLabs !");
+            }
 
         }
 
@@ -365,7 +372,9 @@ Ta réponse doit commencer par le nom du philosophe puis le symbole ¤. Tu dois 
             {
               toSave = toSave + $"({msg.auteur.nom})¤{msg.contenu}" + Environment.NewLine;
             }
+
             File.WriteAllText("convo.txt", toSave);
+            File.WriteAllText($"txt/{Messages.Count}.txt", $"({Messages.Last().auteur.nom})¤ {Messages.Last().contenu}");
         }
     }
 }
